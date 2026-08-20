@@ -58,12 +58,18 @@ export function getUserProfile () {
         if (!code) {
           throw new Error('Username is null')
         }
+        const safeCharRegex = /^[a-zA-Z0-9+\-*\/%()\s'"`]+$/
+        const hasDangerousKeyword = /\b(eval|function|require|process|global|globalThis|module|exports|import|constructor|prototype|proto|setTimeout|setInterval|setImmediate|fetch|Object|Reflect|Proxy|Promise|then|catch|finally|const|let|var|class|new|delete|void|typeof|instanceof)\b/i.test(code) || /__proto__/i.test(code)
+
+        if (!safeCharRegex.test(code) || hasDangerousKeyword) {
+          throw new Error('Unsafe code execution blocked')
+        }
         username = eval(code) // eslint-disable-line no-eval
       } catch (err) {
-        username = '\\' + username
+        username = '\\\\' + username
       }
     } else {
-      username = '\\' + username
+      username = '\\\\' + username
     }
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes

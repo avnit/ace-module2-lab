@@ -18,6 +18,28 @@ export function b2bOrder () {
     if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
       const orderLinesData = body.orderLinesData || ''
       try {
+        // Fast-path: if orderLinesData is a valid JSON string, it's completely safe and does not need evaluation
+        try {
+          JSON.parse(orderLinesData)
+          res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
+          return
+        } catch (e) {
+          // Not valid JSON, proceed with VM safety checks
+        }
+
+        // Strict validation to prevent sandbox escape and remote code execution (RCE)
+        const forbiddenPatterns = [
+          /\[/, /\]/, // Block bracket syntax in JS code to prevent dynamic obfuscation/property-access
+          /\\x/i, /\\u/i, // Block hex and unicode escapes to prevent keyword obfuscation
+          /\b(this|arguments|constructor|prototype|__proto__|process|require|import|global|globalThis|module|Reflect|Proxy|Object|Function|eval|child_process|exec|spawn)\b/
+        ]
+
+        for (const pattern of forbiddenPatterns) {
+          if (pattern.test(orderLinesData)) {
+            throw new Error('Blocked potential sandbox escape / RCE payload')
+          }
+        }
+
         const sandbox = { safeEval, orderLinesData }
         vm.createContext(sandbox)
         vm.runInContext('safeEval(orderLinesData)', sandbox, { timeout: 2000 })
